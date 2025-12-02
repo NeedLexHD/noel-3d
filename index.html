@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>Noël 3D Optimisé</title>
 <style>
   body { margin: 0; overflow: hidden; background: #330066; font-family: sans-serif; color: white; }
@@ -13,14 +13,18 @@
     padding: 12px;
     border-radius: 10px;
     z-index: 10;
+    width: 220px;
   }
-  #uiContainer input[type=range] {
+  #uiContainer select,
+  #uiContainer input[type=range],
+  #uiContainer input[type=color] {
     width: 180px;
+    margin-top: 6px;
   }
   #uiContainer label {
     display: block;
-    margin-top: 6px;
     font-size: 14px;
+    margin-top: 12px;
   }
   #previewCanvas {
     width: 180px;
@@ -35,18 +39,30 @@
 <body>
 
 <div id="uiContainer">
-  <label>Flocon : <input type="range" id="floconSlider" min="0" max="8" value="0"></label>
-  <label>Rotation X : <input type="range" id="rotX" min="0" max="6.28" step="0.01" value="0"></label>
-  <label>Rotation Y : <input type="range" id="rotY" min="0" max="6.28" step="0.01" value="0"></label>
-  <label>Rotation Z : <input type="range" id="rotZ" min="0" max="6.28" step="0.01" value="0"></label>
-  <label>Échelle : <input type="range" id="scaleSlider" min="0.05" max="0.5" step="0.01" value="0.1"></label>
-  <label>Couleur : <input type="color" id="colorPicker" value="#ffffff"></label>
+  <label>Flocon : 
+    <select id="floconSelect" disabled>
+      <option value="0">Flocon 1</option>
+      <option value="1">Flocon 2</option>
+      <option value="2">Flocon 3</option>
+      <option value="3">Flocon 4</option>
+      <option value="4">Flocon 5</option>
+      <option value="5">Flocon 6</option>
+      <option value="6">Flocon 7</option>
+      <option value="7">Flocon 8</option>
+      <option value="8">Flocon 9</option>
+    </select>
+  </label>
+
+  <label>Échelle : <input type="range" id="scaleSlider" min="0.05" max="0.5" step="0.01" value="0.1" disabled></label>
+  <label>Couleur : <input type="color" id="colorPicker" value="#ffffff" disabled></label>
   <canvas id="previewCanvas"></canvas>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.162.0/examples/js/loaders/STLLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.162.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.162.0/examples/js/loaders/FontLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.162.0/examples/fonts/helvetiker_regular.typeface.json"></script>
 
 <script>
   // --- Scène principale ---
@@ -64,7 +80,7 @@
   scene.add(dirLight);
   scene.add(new THREE.AmbientLight(0xffffff,0.5));
 
-  // --- Loader STL ---
+  // Loader STL
   const loader = new THREE.STLLoader();
   const flocons = [
     'https://needlexhd.github.io/noel-3d/snowflake.stl_1.stl',
@@ -79,18 +95,6 @@
   ];
   const meshes = [];
 
-  flocons.forEach((url,i)=>{
-    loader.load(url,geometry=>{
-      geometry.center();
-      const material = new THREE.MeshPhongMaterial({color:0xffffff});
-      const mesh = new THREE.Mesh(geometry,material);
-      mesh.visible = i===0;
-      mesh.scale.set(0.1,0.1,0.1);
-      scene.add(mesh);
-      meshes.push(mesh);
-    });
-  });
-
   // --- Aperçu miniature ---
   const previewCanvas = document.getElementById('previewCanvas');
   const previewRenderer = new THREE.WebGLRenderer({canvas:previewCanvas,antialias:true,alpha:true});
@@ -101,54 +105,118 @@
   previewScene.add(new THREE.AmbientLight(0xffffff,1));
   let previewMesh = null;
 
-  function updatePreview(){
+  // UI Elements
+  const floconSelect = document.getElementById('floconSelect');
+  const scaleSlider = document.getElementById('scaleSlider');
+  const colorPicker = document.getElementById('colorPicker');
+
+  // Font loader et texte 3D
+  const fontLoader = new THREE.FontLoader();
+  let font = null;
+  let textMesh = null;
+
+  fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (loadedFont) => {
+    font = loadedFont;
+  });
+
+  // Ajoute le texte 3D au mesh du flocon
+  function addTextToFlocon(floconMesh) {
+    if(!font) return; // si la font pas encore chargée
+    if(textMesh) floconMesh.remove(textMesh);
+
+    const textGeo = new THREE.TextGeometry('Snowfield', {
+      font: font,
+      size: 1,
+      height: 0.2,
+      curveSegments: 12,
+    });
+    textGeo.computeBoundingBox();
+    const bbox = textGeo.boundingBox;
+    const textWidth = bbox.max.x - bbox.min.x;
+
+    const textMat = new THREE.MeshPhongMaterial({color: 0xffffff});
+    textMesh = new THREE.Mesh(textGeo, textMat);
+
+    // Positionner le texte centré horizontalement et 2 unités au-dessus du flocon
+    textMesh.position.set(-textWidth/2, 2, 0);
+    floconMesh.add(textMesh);
+  }
+
+  // Met à jour la prévisualisation miniature
+  function updatePreview() {
     if(previewMesh) previewScene.remove(previewMesh);
-    const index = parseInt(document.getElementById('floconSlider').value);
-    if(meshes[index]){
+    const index = parseInt(floconSelect.value);
+    if(meshes[index]) {
       previewMesh = meshes[index].clone();
       previewMesh.scale.copy(meshes[index].scale);
+      if(textMesh) previewMesh.add(textMesh.clone());
       previewScene.add(previewMesh);
     }
   }
 
-  // --- UI ---
-  const floconSlider = document.getElementById('floconSlider');
-  const rotX = document.getElementById('rotX');
-  const rotY = document.getElementById('rotY');
-  const rotZ = document.getElementById('rotZ');
-  const scaleSlider = document.getElementById('scaleSlider');
-  const colorPicker = document.getElementById('colorPicker');
+  // Chargement des flocons STL
+  let loadedCount = 0;
+  flocons.forEach((url,i) => {
+    loader.load(url, geometry => {
+      geometry.center();
+      const material = new THREE.MeshPhongMaterial({color: 0xffffff});
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.visible = i === 0;
+      mesh.scale.set(0.1, 0.1, 0.1);
+      scene.add(mesh);
+      meshes.push(mesh);
 
-  floconSlider.addEventListener('input', ()=>{
-    meshes.forEach((m,i)=>m.visible=i==floconSlider.value);
+      loadedCount++;
+      if(loadedCount === flocons.length) {
+        // Activation UI quand tout est chargé
+        floconSelect.disabled = false;
+        scaleSlider.disabled = false;
+        colorPicker.disabled = false;
+        floconSelect.value = "0";
+        addTextToFlocon(meshes[0]);
+        updatePreview();
+      }
+    });
+  });
+
+  // Événements UI
+  floconSelect.addEventListener('change', () => {
+    const index = parseInt(floconSelect.value);
+    meshes.forEach((m,i) => m.visible = i === index);
+    addTextToFlocon(meshes[index]);
     updatePreview();
   });
-  rotX.addEventListener('input',()=>{ meshes.forEach(m=>{if(m.visible)m.rotation.x=parseFloat(rotX.value); }); });
-  rotY.addEventListener('input',()=>{ meshes.forEach(m=>{if(m.visible)m.rotation.y=parseFloat(rotY.value); }); });
-  rotZ.addEventListener('input',()=>{ meshes.forEach(m=>{if(m.visible)m.rotation.z=parseFloat(rotZ.value); }); });
-  scaleSlider.addEventListener('input',()=>{ meshes.forEach(m=>{if(m.visible)m.scale.set(parseFloat(scaleSlider.value),parseFloat(scaleSlider.value),parseFloat(scaleSlider.value)); updatePreview(); }); });
-  colorPicker.addEventListener('input',()=>{ meshes.forEach(m=>{if(m.visible)m.material.color.set(colorPicker.value); if(previewMesh) previewMesh.material.color.set(colorPicker.value); }); });
 
-  // --- Animation ---
-  function animate(){
+  scaleSlider.addEventListener('input', () => {
+    const scale = parseFloat(scaleSlider.value);
+    meshes.forEach(m => { if(m.visible) m.scale.set(scale, scale, scale); });
+    updatePreview();
+  });
+
+  colorPicker.addEventListener('input', () => {
+    const color = colorPicker.value;
+    meshes.forEach(m => { if(m.visible) m.material.color.set(color); });
+    if(textMesh) textMesh.material.color.set(color);
+    updatePreview();
+  });
+
+  // Animation
+  function animate() {
     requestAnimationFrame(animate);
-    meshes.forEach(m=>{if(m.visible)m.rotation.y+=0.01;});
-    if(previewMesh) previewMesh.rotation.y+=0.01;
-    renderer.render(scene,camera);
-    previewRenderer.render(previewScene,previewCamera);
+    meshes.forEach(m => { if(m.visible) m.rotation.y += 0.01; });
+    if(previewMesh) previewMesh.rotation.y += 0.01;
+    renderer.render(scene, camera);
+    previewRenderer.render(previewScene, previewCamera);
   }
   animate();
 
-  // --- Redimensionnement ---
-  window.addEventListener('resize',()=>{
+  // Resize
+  window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth,window.innerHeight);
+    renderer.setSize(window.innerWidth, window.innerHeight);
   });
-
-  // --- Initial preview après chargement ---
-  setTimeout(updatePreview,1500);
-
 </script>
+
 </body>
 </html>
